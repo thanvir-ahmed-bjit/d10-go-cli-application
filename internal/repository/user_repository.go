@@ -38,6 +38,9 @@ func (r *UserRepository) Create(user *model.User) error {
 		return ErrDuplicateID
 	}
 
+	user.Name = strings.TrimSpace(user.Name)
+	user.Email = strings.TrimSpace(user.Email)
+
 	r.usersByOrder = append(r.usersByOrder, user)
 	r.usersByID[user.ID] = user
 	return nil
