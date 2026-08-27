@@ -2,27 +2,46 @@ package handler
 
 import (
 	"bufio"
+	"context"
+	"errors"
 	"fmt"
 	"io"
 	"strconv"
 	"strings"
 
-	"d5/internal/config"
-	"d5/internal/model"
-	"d5/internal/repository"
+	"d10-go-cli-application/internal/config"
+	"d10-go-cli-application/internal/domain"
+	"d10-go-cli-application/internal/model"
 )
 
+// UserUseCases defines the use cases the handler consumes.
+type UserUseCases interface {
+	Create(ctx context.Context, user *model.User) error
+	List(ctx context.Context) ([]*model.User, error)
+	Find(ctx context.Context, id int) (*model.User, error)
+	Update(ctx context.Context, id int, name, email string) error
+	Delete(ctx context.Context, id int) error
+	Filter(ctx context.Context, term string) ([]*model.User, error)
+}
+
+// UserHandler handles CLI interaction for user management.
 type UserHandler struct {
-	repository *repository.UserRepository
-	input      *bufio.Scanner
-	output     io.Writer
+	service UserUseCases
+	input   *bufio.Scanner
+	output  io.Writer
 }
 
-func NewUserHandler(repository *repository.UserRepository, input io.Reader, output io.Writer) *UserHandler {
-	return &UserHandler{repository: repository, input: bufio.NewScanner(input), output: output}
+// NewUserHandler creates a new UserHandler.
+func NewUserHandler(service UserUseCases, input io.Reader, output io.Writer) *UserHandler {
+	return &UserHandler{
+		service: service,
+		input:   bufio.NewScanner(input),
+		output:  output,
+	}
 }
 
-func (h *UserHandler) Run() {
+// Run starts the interactive CLI loop.
+func (h *UserHandler) Run(ctx context.Context) {
 	for {
 		fmt.Fprintln(h.output, config.MenuHeader)
 		fmt.Fprintln(h.output, "1. Add user")
@@ -40,17 +59,17 @@ func (h *UserHandler) Run() {
 
 		switch choice {
 		case "1":
-			h.addUser()
+			h.addUser(ctx)
 		case "2":
-			h.listUsers()
+			h.listUsers(ctx)
 		case "3":
-			h.findUser()
+			h.findUser(ctx)
 		case "4":
-			h.updateUser()
+			h.updateUser(ctx)
 		case "5":
-			h.deleteUser()
+			h.deleteUser(ctx)
 		case "6":
-			h.filterUsers()
+			h.filterUsers(ctx)
 		case "7":
 			fmt.Fprintln(h.output, "Goodbye!")
 			return
@@ -60,7 +79,7 @@ func (h *UserHandler) Run() {
 	}
 }
 
-func (h *UserHandler) addUser() {
+func (h *UserHandler) addUser(ctx context.Context) {
 	id, ok := h.readID("ID: ")
 	if !ok {
 		return
@@ -73,31 +92,41 @@ func (h *UserHandler) addUser() {
 	if !ok {
 		return
 	}
-	if err := h.repository.Create(&model.User{ID: id, Name: name, Email: email}); err != nil {
-		fmt.Fprintln(h.output, "Error:", err)
+
+	err := h.service.Create(ctx, &model.User{ID: id, Name: name, Email: email})
+	if err != nil {
+		h.renderError(err)
 		return
 	}
+
 	fmt.Fprintln(h.output, "User added successfully.")
 }
 
-func (h *UserHandler) listUsers() {
-	h.printUsers(h.repository.List())
+func (h *UserHandler) listUsers(ctx context.Context) {
+	users, err := h.service.List(ctx)
+	if err != nil {
+		h.renderError(err)
+		return
+	}
+	h.printUsers(users)
 }
 
-func (h *UserHandler) findUser() {
+func (h *UserHandler) findUser(ctx context.Context) {
 	id, ok := h.readID("ID to find: ")
 	if !ok {
 		return
 	}
-	user, exists := h.repository.Find(id)
-	if !exists {
-		fmt.Fprintln(h.output, "Error:", repository.ErrUserNotFound)
+
+	user, err := h.service.Find(ctx, id)
+	if err != nil {
+		h.renderError(err)
 		return
 	}
+
 	h.printUsers([]*model.User{user})
 }
 
-func (h *UserHandler) updateUser() {
+func (h *UserHandler) updateUser(ctx context.Context) {
 	id, ok := h.readID("ID to update: ")
 	if !ok {
 		return
@@ -110,31 +139,66 @@ func (h *UserHandler) updateUser() {
 	if !ok {
 		return
 	}
-	if err := h.repository.Update(id, name, email); err != nil {
-		fmt.Fprintln(h.output, "Error:", err)
+
+	err := h.service.Update(ctx, id, name, email)
+	if err != nil {
+		h.renderError(err)
 		return
 	}
+
 	fmt.Fprintln(h.output, "User updated successfully.")
 }
 
-func (h *UserHandler) deleteUser() {
+func (h *UserHandler) deleteUser(ctx context.Context) {
 	id, ok := h.readID("ID to delete: ")
 	if !ok {
 		return
 	}
-	if err := h.repository.Delete(id); err != nil {
-		fmt.Fprintln(h.output, "Error:", err)
+
+	err := h.service.Delete(ctx, id)
+	if err != nil {
+		h.renderError(err)
 		return
 	}
+
 	fmt.Fprintln(h.output, "User deleted successfully.")
 }
 
-func (h *UserHandler) filterUsers() {
+func (h *UserHandler) filterUsers(ctx context.Context) {
 	term, ok := h.readLine("Search name or email: ")
 	if !ok {
 		return
 	}
-	h.printUsers(h.repository.Filter(term))
+
+	users, err := h.service.Filter(ctx, term)
+	if err != nil {
+		h.renderError(err)
+		return
+	}
+
+	h.printUsers(users)
+}
+
+// renderError renders error messages in a user-friendly way.
+func (h *UserHandler) renderError(err error) {
+	if errors.Is(err, domain.ErrUserNotFound) {
+		fmt.Fprintln(h.output, "Error: User not found.")
+		return
+	}
+
+	if errors.Is(err, domain.ErrDuplicateID) {
+		fmt.Fprintln(h.output, "Error: A user with that ID already exists.")
+		return
+	}
+
+	var ve *domain.ValidationError
+	if errors.As(err, &ve) {
+		fmt.Fprintf(h.output, "Error: Invalid %s: %s\n", ve.Field, ve.Reason)
+		return
+	}
+
+	// Default error message for unknown errors
+	fmt.Fprintln(h.output, "Error: An error occurred.")
 }
 
 func (h *UserHandler) readID(prompt string) (int, bool) {
