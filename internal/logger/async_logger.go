@@ -60,6 +60,21 @@ func (l *AsyncLogger) Log(ctx context.Context, message string) error {
 	}
 }
 
+// Flush waits for pending messages to be processed.
+// It gives the background goroutine time to drain the message buffer.
+func (l *AsyncLogger) Flush() error {
+	l.mu.RLock()
+	if l.closed {
+		l.mu.RUnlock()
+		return domain.ErrLoggerClosed
+	}
+	l.mu.RUnlock()
+
+	// Give the background goroutine time to process queued messages
+	time.Sleep(10 * time.Millisecond)
+	return nil
+}
+
 // Close gracefully shuts down the logger, allowing any accepted messages to be written.
 // It is safe to call Close multiple times.
 func (l *AsyncLogger) Close() error {

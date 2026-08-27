@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"os/signal"
+	"syscall"
 
 	"d10-go-cli-application/internal/handler"
 	"d10-go-cli-application/internal/logger"
@@ -27,8 +29,21 @@ func main() {
 	}()
 
 	svc := service.NewUserService(repo, log)
-	app := handler.NewUserHandler(svc, os.Stdin, os.Stdout)
+	app := handler.NewUserHandler(svc, os.Stdin, os.Stdout, log)
 
-	ctx := context.Background()
+	// Set up graceful shutdown with signal handling
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// Listen for interrupt signals (Ctrl+C)
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+
+	go func() {
+		<-sigChan
+		fmt.Fprintln(os.Stdout, "\n[Shutting down gracefully...]")
+		cancel()
+	}()
+
 	app.Run(ctx)
 }

@@ -11,6 +11,7 @@ import (
 
 	"d10-go-cli-application/internal/config"
 	"d10-go-cli-application/internal/domain"
+	"d10-go-cli-application/internal/logger"
 	"d10-go-cli-application/internal/model"
 )
 
@@ -29,20 +30,29 @@ type UserHandler struct {
 	service UserUseCases
 	input   *bufio.Scanner
 	output  io.Writer
+	logger  logger.Logger
 }
 
 // NewUserHandler creates a new UserHandler.
-func NewUserHandler(service UserUseCases, input io.Reader, output io.Writer) *UserHandler {
+func NewUserHandler(service UserUseCases, input io.Reader, output io.Writer, log logger.Logger) *UserHandler {
 	return &UserHandler{
 		service: service,
 		input:   bufio.NewScanner(input),
 		output:  output,
+		logger:  log,
 	}
 }
 
 // Run starts the interactive CLI loop.
 func (h *UserHandler) Run(ctx context.Context) {
 	for {
+		select {
+		case <-ctx.Done():
+			fmt.Fprintln(h.output, "\nGoodbye!")
+			return
+		default:
+		}
+
 		fmt.Fprintln(h.output, config.MenuHeader)
 		fmt.Fprintln(h.output, "1. Add user")
 		fmt.Fprintln(h.output, "2. List users")
@@ -53,7 +63,7 @@ func (h *UserHandler) Run(ctx context.Context) {
 		fmt.Fprintln(h.output, "7. Exit")
 		choice, ok := h.readLine("Choose an option: ")
 		if !ok {
-			fmt.Fprintln(h.output, "Goodbye!")
+			fmt.Fprintln(h.output, "\nGoodbye!")
 			return
 		}
 
@@ -71,7 +81,7 @@ func (h *UserHandler) Run(ctx context.Context) {
 		case "6":
 			h.filterUsers(ctx)
 		case "7":
-			fmt.Fprintln(h.output, "Goodbye!")
+			fmt.Fprintln(h.output, "\nGoodbye!")
 			return
 		default:
 			fmt.Fprintln(h.output, "Invalid menu option. Choose a number from 1 to 7.")
@@ -99,6 +109,7 @@ func (h *UserHandler) addUser(ctx context.Context) {
 		return
 	}
 
+	_ = h.logger.Flush()
 	fmt.Fprintln(h.output, "User added successfully.")
 }
 
@@ -146,6 +157,7 @@ func (h *UserHandler) updateUser(ctx context.Context) {
 		return
 	}
 
+	_ = h.logger.Flush()
 	fmt.Fprintln(h.output, "User updated successfully.")
 }
 
@@ -161,6 +173,7 @@ func (h *UserHandler) deleteUser(ctx context.Context) {
 		return
 	}
 
+	_ = h.logger.Flush()
 	fmt.Fprintln(h.output, "User deleted successfully.")
 }
 
@@ -227,9 +240,31 @@ func (h *UserHandler) printUsers(users []*model.User) {
 		fmt.Fprintln(h.output, "No users found.")
 		return
 	}
-	fmt.Fprintln(h.output, "ID\tNAME\tEMAIL")
-	fmt.Fprintln(h.output, "--\t----\t-----")
+
+	// Calculate optimal column widths
+	idWidth := len("ID")
+	nameWidth := len("NAME")
+	emailWidth := len("EMAIL")
+
 	for _, user := range users {
-		fmt.Fprintf(h.output, "%d\t%s\t%s\n", user.ID, user.Name, user.Email)
+		if len(fmt.Sprintf("%d", user.ID)) > idWidth {
+			idWidth = len(fmt.Sprintf("%d", user.ID))
+		}
+		if len(user.Name) > nameWidth {
+			nameWidth = len(user.Name)
+		}
+		if len(user.Email) > emailWidth {
+			emailWidth = len(user.Email)
+		}
 	}
+
+	// Print header
+	fmt.Fprintf(h.output, "\n%-*s  %-*s  %-*s\n", idWidth, "ID", nameWidth, "NAME", emailWidth, "EMAIL")
+	fmt.Fprintf(h.output, "%s  %s  %s\n", strings.Repeat("-", idWidth), strings.Repeat("-", nameWidth), strings.Repeat("-", emailWidth))
+
+	// Print rows
+	for _, user := range users {
+		fmt.Fprintf(h.output, "%-*d  %-*s  %-*s\n", idWidth, user.ID, nameWidth, user.Name, emailWidth, user.Email)
+	}
+	fmt.Fprintln(h.output, "")
 }

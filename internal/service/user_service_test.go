@@ -119,6 +119,10 @@ func (f *FakeLogger) Log(ctx context.Context, message string) error {
 	return nil
 }
 
+func (f *FakeLogger) Flush() error {
+	return nil
+}
+
 func (f *FakeLogger) Close() error {
 	f.closed = true
 	return f.closeErr

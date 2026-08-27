@@ -11,6 +11,30 @@ import (
 	"d10-go-cli-application/internal/model"
 )
 
+// FakeLogger is a test double for Logger.
+type FakeLogger struct {
+	messages []string
+}
+
+func NewFakeLogger() *FakeLogger {
+	return &FakeLogger{
+		messages: make([]string, 0),
+	}
+}
+
+func (f *FakeLogger) Log(ctx context.Context, message string) error {
+	f.messages = append(f.messages, message)
+	return nil
+}
+
+func (f *FakeLogger) Flush() error {
+	return nil
+}
+
+func (f *FakeLogger) Close() error {
+	return nil
+}
+
 // FakeService is a test double for UserUseCases.
 type FakeService struct {
 	users     map[int]*model.User
@@ -108,7 +132,8 @@ func TestUserHandlerAddUser(t *testing.T) {
 	service := NewFakeService()
 	output := &bytes.Buffer{}
 	input := strings.NewReader("1\n1\nAlice\nalice@example.com\n7\n")
-	handler := NewUserHandler(service, input, output)
+	logger := NewFakeLogger()
+	handler := NewUserHandler(service, input, output, logger)
 
 	ctx := context.Background()
 	handler.Run(ctx)
@@ -129,7 +154,8 @@ func TestUserHandlerListUsers(t *testing.T) {
 
 	output := &bytes.Buffer{}
 	input := strings.NewReader("2\n7\n")
-	handler := NewUserHandler(service, input, output)
+	logger := NewFakeLogger()
+	handler := NewUserHandler(service, input, output, logger)
 
 	ctx := context.Background()
 	handler.Run(ctx)
@@ -146,7 +172,8 @@ func TestUserHandlerFindUser(t *testing.T) {
 
 	output := &bytes.Buffer{}
 	input := strings.NewReader("3\n1\n7\n")
-	handler := NewUserHandler(service, input, output)
+	logger := NewFakeLogger()
+	handler := NewUserHandler(service, input, output, logger)
 
 	ctx := context.Background()
 	handler.Run(ctx)
@@ -163,7 +190,8 @@ func TestUserHandlerFindUserNotFound(t *testing.T) {
 
 	output := &bytes.Buffer{}
 	input := strings.NewReader("3\n99\n7\n")
-	handler := NewUserHandler(service, input, output)
+	logger := NewFakeLogger()
+	handler := NewUserHandler(service, input, output, logger)
 
 	ctx := context.Background()
 	handler.Run(ctx)
@@ -180,7 +208,8 @@ func TestUserHandlerUpdateUser(t *testing.T) {
 
 	output := &bytes.Buffer{}
 	input := strings.NewReader("4\n1\nAlice Updated\nalice.updated@example.com\n7\n")
-	handler := NewUserHandler(service, input, output)
+	logger := NewFakeLogger()
+	handler := NewUserHandler(service, input, output, logger)
 
 	ctx := context.Background()
 	handler.Run(ctx)
@@ -197,7 +226,8 @@ func TestUserHandlerDeleteUser(t *testing.T) {
 
 	output := &bytes.Buffer{}
 	input := strings.NewReader("5\n1\n7\n")
-	handler := NewUserHandler(service, input, output)
+	logger := NewFakeLogger()
+	handler := NewUserHandler(service, input, output, logger)
 
 	ctx := context.Background()
 	handler.Run(ctx)
@@ -219,7 +249,8 @@ func TestUserHandlerFilterUsers(t *testing.T) {
 
 	output := &bytes.Buffer{}
 	input := strings.NewReader("6\nalice\n7\n")
-	handler := NewUserHandler(service, input, output)
+	logger := NewFakeLogger()
+	handler := NewUserHandler(service, input, output, logger)
 
 	ctx := context.Background()
 	handler.Run(ctx)
@@ -234,7 +265,8 @@ func TestUserHandlerInvalidMenuOption(t *testing.T) {
 	service := NewFakeService()
 	output := &bytes.Buffer{}
 	input := strings.NewReader("9\n7\n")
-	handler := NewUserHandler(service, input, output)
+	logger := NewFakeLogger()
+	handler := NewUserHandler(service, input, output, logger)
 
 	ctx := context.Background()
 	handler.Run(ctx)
@@ -249,7 +281,8 @@ func TestUserHandlerInvalidIntegerInput(t *testing.T) {
 	service := NewFakeService()
 	output := &bytes.Buffer{}
 	input := strings.NewReader("3\nabc\n7\n")
-	handler := NewUserHandler(service, input, output)
+	logger := NewFakeLogger()
+	handler := NewUserHandler(service, input, output, logger)
 
 	ctx := context.Background()
 	handler.Run(ctx)
@@ -264,7 +297,8 @@ func TestUserHandlerEOF(t *testing.T) {
 	service := NewFakeService()
 	output := &bytes.Buffer{}
 	input := strings.NewReader("")
-	handler := NewUserHandler(service, input, output)
+	logger := NewFakeLogger()
+	handler := NewUserHandler(service, input, output, logger)
 
 	ctx := context.Background()
 	handler.Run(ctx)
@@ -279,7 +313,8 @@ func TestUserHandlerExit(t *testing.T) {
 	service := NewFakeService()
 	output := &bytes.Buffer{}
 	input := strings.NewReader("7\n")
-	handler := NewUserHandler(service, input, output)
+	logger := NewFakeLogger()
+	handler := NewUserHandler(service, input, output, logger)
 
 	ctx := context.Background()
 	handler.Run(ctx)
@@ -296,7 +331,8 @@ func TestUserHandlerDuplicateIDError(t *testing.T) {
 
 	output := &bytes.Buffer{}
 	input := strings.NewReader("1\n1\nAlice\nalice@example.com\n7\n")
-	handler := NewUserHandler(service, input, output)
+	logger := NewFakeLogger()
+	handler := NewUserHandler(service, input, output, logger)
 
 	ctx := context.Background()
 	handler.Run(ctx)
